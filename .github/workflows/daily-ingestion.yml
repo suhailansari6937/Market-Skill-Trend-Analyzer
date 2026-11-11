@@ -1,0 +1,19 @@
+name: Daily job data ingestion
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call configured ingestion endpoint
+        env:
+          INGEST_URL: ${{ secrets.INGEST_URL }}
+          INGEST_TOKEN: ${{ secrets.INGEST_TOKEN }}
+        run: |
+          if [ -z "$INGEST_URL" ]; then
+            echo "INGEST_URL secret not configured; no source ingestion executed."
+            exit 0
+          fi
+          curl --fail --silent --show-error -X POST "$INGEST_URL"             -H "Authorization: Bearer $INGEST_TOKEN"             -H "Content-Type: application/json"             -d '{}'
