@@ -10,7 +10,13 @@ from app.core.config import settings
 from app.core.security import hash_password, verify_password, create_access_token, get_current_user, require_roles
 from app.db.database import Base, engine, get_db
 from app.models import User, Job, IngestionRun, SavedSearch, Notification
-from app.schemas import RegisterIn, LoginIn, UserOut, JobIn, ProfileIn, CompareIn
+from app.schemas import (
+    RegisterIn, LoginIn, UserOut, JobIn,
+    ProfileIn, CompareIn, ExperiencePredictionIn
+)
+
+import joblib
+from pathlib import Path
 from app.services import (
     extract_skills,
     job_to_dict,
@@ -26,6 +32,16 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title=settings.app_name, version="1.0.0", description="Job market analytics and skill trend API")
 app.add_middleware(CORSMiddleware, allow_origins=[x.strip() for x in settings.cors_origins.split(",")], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
+
+# Load trained ML model
+MODEL_PATH = (
+    Path(__file__).resolve().parent.parent
+    / "ml"
+    / "experience_level_model.joblib"
+)
+
+experience_model = joblib.load(MODEL_PATH) 
+
 @app.get("/")
 def root():
     return {"message": settings.app_name, "docs": "/docs"}
@@ -33,6 +49,31 @@ def root():
 @app.get("/api/v1/health")
 def health(db: Session = Depends(get_db)):
     return {"status": "ok", "database": "connected", "jobs": db.query(Job).count()}
+
+@app.post("/api/v1/ml/predict-experience")
+def predict_experience(data: ExperiencePredictionIn):
+
+    probabilities = experience_model.predict_proba(
+        [data.description]
+    )[0]
+
+    predicted_class = experience_model.predict(
+        [data.description]
+    )[0]
+
+    class_probabilities = {
+        str(label): round(float(prob), 4)
+        for label, prob in zip(
+            experience_model.classes_,
+            probabilities
+        )
+    }
+
+    return {
+        "predicted_experience": str(predicted_class),
+        "confidence": round(float(max(probabilities)), 4),
+        "probabilities": class_probabilities
+    }
 
 @app.post("/api/v1/auth/register")
 def register(data: RegisterIn, db: Session = Depends(get_db)):

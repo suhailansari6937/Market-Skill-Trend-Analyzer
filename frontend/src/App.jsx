@@ -74,6 +74,11 @@ function App() {
 
   const [loading, setLoading] = useState(false);
 
+  // ML Experience Predictor
+const [jobDescription, setJobDescription] = useState('');
+const [prediction, setPrediction] = useState(null);
+const [predicting, setPredicting] = useState(false);
+
   const headers = useMemo(() => ({}), []);
 
 
@@ -233,6 +238,34 @@ function App() {
     }
   }
 
+  async function predictExperience(e) {
+  e.preventDefault();
+
+  if (jobDescription.trim().length < 30) {
+    setMsg('Please enter at least 30 characters.');
+    return;
+  }
+
+  setPredicting(true);
+  setPrediction(null);
+  setMsg('');
+
+  try {
+    const result = await request('/ml/predict-experience', {
+      method: 'POST',
+      body: JSON.stringify({
+        description: jobDescription
+      })
+    });
+
+    setPrediction(result);
+  } catch (e) {
+    setMsg(e.message);
+  } finally {
+    setPredicting(false);
+  }
+}
+
 
   async function loadAdmin() {
     try {
@@ -305,6 +338,7 @@ function App() {
   const nav = [
     'Overview',
     'Jobs',
+    'AI Experience Predictor',
     'Skill Insights',
     'Compare Skills',
     ...(user?.role === 'student'
@@ -349,17 +383,26 @@ function App() {
             onClick={() => go(n)}
           >
             {[
-              <ChartNoAxesCombined />,
-              <BriefcaseBusiness />,
-              <TrendingUp />,
-              <Code2 />,
-              <Users />,
-              <Sparkles />,
-              <ShieldCheck />
-            ][
-              ['Overview', 'Jobs', 'Skill Insights', 'Compare Skills',
-                'My Profile', 'Recommendations', 'Admin'].indexOf(n)
-            ] || <Activity />}
+  <ChartNoAxesCombined />,
+  <BriefcaseBusiness />,
+  <Sparkles />,
+  <TrendingUp />,
+  <Code2 />,
+  <Users />,
+  <Sparkles />,
+  <ShieldCheck />
+][
+  [
+    'Overview',
+    'Jobs',
+    'AI Experience Predictor',
+    'Skill Insights',
+    'Compare Skills',
+    'My Profile',
+    'Recommendations',
+    'Admin'
+  ].indexOf(n)
+] || <Activity />}
 
             <span>{n}</span>
 
@@ -373,7 +416,7 @@ function App() {
           <div className="source-card">
             <Database size={17} />
             <b>Data workspace</b>
-            <span>{stats.total_jobs.toLocaleString()} postings indexed</span>
+            <span>{(stats?.total_jobs ?? 0).toLocaleString()} postings indexed</span>
             <small>Insights update as data is added.</small>
           </div>
 
@@ -541,21 +584,21 @@ function App() {
                 <Stat
                   icon={<Code2 />}
                   label="Skills identified"
-                  value={stats.total_skills}
+                  value={stats.total_skills ?? 0}
                   note="Unique skill terms"
                 />
 
                 <Stat
                   icon={<Globe2 />}
                   label="Countries"
-                  value={stats.countries.length}
+                  value={stats.countries?.length ?? 0}
                   note="In current dataset"
                 />
 
                 <Stat
                   icon={<TrendingUp />}
                   label="Industries"
-                  value={stats.industries.length}
+                  value={stats.industries?.length ?? 0}
                   note="Represented sectors"
                 />
 
@@ -631,12 +674,12 @@ function App() {
                     subtitle="Job postings by country"
                   />
 
-                  {stats.countries.map((c, i) => (
+                 {(stats.countries ?? []).map((c, i) => (
                     <div className="distribution" key={c.name}>
 
                       <div>
                         <span>{c.name}</span>
-                        <b>{c.count.toLocaleString()}</b>
+                        <b>{(c.count ?? 0).toLocaleString()}</b>
                       </div>
 
                       <div className="progress">
@@ -654,7 +697,7 @@ function App() {
                     </div>
                   ))}
 
-                  {!stats.countries.length && <Empty />}
+                 {!(stats.countries?.length) && <Empty />}
 
                 </div>
 
@@ -830,6 +873,106 @@ function App() {
             </>
           )}
 
+          {/* AI EXPERIENCE PREDICTOR */}
+{page === 'AI Experience Predictor' && (
+  <>
+    <PageHead
+      title="AI Experience Predictor"
+      desc="Predict the experience level of a job using our trained Machine Learning model."
+    />
+
+    <div className="panel">
+      <PanelTitle
+        title="Job Description Analyzer"
+        subtitle="Enter a job description to predict its experience level."
+      />
+
+      <form onSubmit={predictExperience}>
+        <label>Job Description</label>
+
+        <textarea
+          rows="7"
+          value={jobDescription}
+          onChange={e => setJobDescription(e.target.value)}
+          placeholder="Paste job description here..."
+          minLength={30}
+          maxLength={10000}
+          required
+        />
+
+        <div className="form-actions">
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={predicting}
+          >
+            <Sparkles size={16} />
+            {predicting ? 'Analyzing...' : 'Predict Experience Level'}
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setJobDescription('');
+              setPrediction(null);
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      </form>
+    </div>
+
+    {prediction && (
+      <div className="panel">
+        <PanelTitle
+          title="Prediction Result"
+          subtitle="ML model output"
+        />
+
+        <div className="insight-top">
+          <div>
+            <span className="eyebrow">PREDICTED EXPERIENCE</span>
+            <h2>{prediction.predicted_experience}</h2>
+          </div>
+
+          <div className="big-number">
+            {(prediction.confidence * 100).toFixed(1)}%
+            <small>Model confidence</small>
+          </div>
+        </div>
+
+        <h4>Class-wise probabilities</h4>
+
+        {Object.entries(prediction.probabilities)
+          .sort((a, b) => b[1] - a[1])
+          .map(([level, probability]) => (
+            <div className="distribution" key={level}>
+              <div>
+                <span>{level}</span>
+                <b>{(probability * 100).toFixed(1)}%</b>
+              </div>
+
+              <div className="progress">
+                <i
+                  style={{
+                    width: `${probability * 100}%`
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+
+        <p className="subtle-note">
+          Predictions are model estimates based on job description text,
+          not verified employment requirements.
+        </p>
+      </div>
+    )}
+  </>
+)}
+
 
           {/* JOBS */}
           {page === 'Jobs' && (
@@ -906,7 +1049,7 @@ function App() {
                         </div>
 
                         <div className="big-number">
-                          {detail.job_count.toLocaleString()}
+                          {(detail.job_count ?? 0).toLocaleString()}
                           <small>matching jobs</small>
                         </div>
 
@@ -927,11 +1070,9 @@ function App() {
 
                         <Stat
                           label="Average salary floor"
-                          value={
-                            detail.average_salary_min
-                              ? `${detail.currency} ${detail.average_salary_min.toLocaleString()}`
-                              : 'N/A'
-                          }
+                          value={detail.average_salary_min != null
+  ? `${detail.currency} ${Number(detail.average_salary_min).toLocaleString()}`
+  : 'N/A'}
                         />
 
                       </div>
@@ -999,7 +1140,7 @@ function App() {
 
                         <h2>{x.skill}</h2>
 
-                        <strong>{x.job_count.toLocaleString()}</strong>
+                        <strong>{(x.job_count ?? 0).toLocaleString()}</strong>
 
                         <small>matching postings</small>
 
@@ -1279,11 +1420,11 @@ function Stat({ icon, label, value, note }) {
 
       <span>{label}</span>
 
-      <strong>
-        {typeof value === 'number'
-          ? value.toLocaleString()
-          : value}
-      </strong>
+     <strong>
+  {typeof value === 'number'
+    ? value.toLocaleString()
+    : value ?? 'N/A'}
+</strong>
 
       <small>{note || 'Current dataset'}</small>
 

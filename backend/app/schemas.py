@@ -41,3 +41,11 @@ class ProfileIn(BaseModel):
 
 class CompareIn(BaseModel):
     skills: list[str] = Field(min_length=2, max_length=5)
+
+
+class ExperiencePredictionIn(BaseModel):
+    description: str = Field(
+        min_length=30,
+        max_length=10000,
+        description="Job description for experience level prediction"
+    )

@@ -13,3 +13,5 @@ psycopg[binary]==3.2.5
 pandas
 pyarrow
 huggingface-hub
+scikit-learn
+joblib
